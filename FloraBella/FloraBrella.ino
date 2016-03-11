@@ -17,7 +17,7 @@ byte gammatable[256];
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
 void setup() {
-    Serial.begin(9600); // Set up serial communication at 9600bps
+    Serial.begin(115200); // Set up serial communication at 9600bps
     pinMode(switchPin, INPUT_PULLUP); // Set the switch pin as input
     pinMode(PIN, OUTPUT);
     strip.setBrightness(80); //adjust brightness here
