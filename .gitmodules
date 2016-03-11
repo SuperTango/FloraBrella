@@ -1,0 +1,6 @@
+[submodule "libraries/Adafruit_TCS34725"]
+	path = libraries/Adafruit_TCS34725
+	url = https://github.com/adafruit/Adafruit_TCS34725.git
+[submodule "libraries/Adafruit_NeoPixel"]
+	path = libraries/Adafruit_NeoPixel
+	url = https://github.com/adafruit/Adafruit_NeoPixel.git
