@@ -3,7 +3,7 @@
 #include <Adafruit_NeoPixel.h>
 
 #define PIN 6
-#define TPIXEL 160 //The total amount of pixel's/led's in your connected strip/stick (Default is 60)
+#define TPIXEL 13 * 8 //The total amount of pixel's/led's in your connected strip/stick (Default is 60)
 
 int switchPin = 10; // switch is connected to pin 10
 int val; // variable for reading the pin status
