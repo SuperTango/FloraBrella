@@ -5,20 +5,127 @@
 #define PIN 6
 #define TPIXEL 13 * 8 //The total amount of pixel's/led's in your connected strip/stick (Default is 60)
 
-int switchPin = 10; // switch is connected to pin 10
+#define COLOR_RED 0xFF0000
+#define COLOR_GREEN 0x00FF00
+#define COLOR_BLUE 0x0000FF
+#define COLOR_CYAN 0x009999
+
+const uint8_t COLORSTATE_RAINBOW = 0;
+const uint8_t COLORSTATE_SOLID_RED = 1;
+const uint8_t COLORSTATE_SOLID_GREEN = 2;
+const uint8_t COLORSTATE_SOLID_BLUE = 3;
+const uint8_t COLORSTATE_SOLID_CYAN = 4;
+uint8_t colorState = COLORSTATE_RAINBOW;
+const uint8_t maxColors = 5;
+
+void printColorState() {
+    Serial.print("ColorState is: ");
+
+    switch (colorState) {
+        case COLORSTATE_RAINBOW:
+            Serial.print("Rainbow");
+            break;
+        case COLORSTATE_SOLID_BLUE:
+            Serial.print("Solid Blue");
+            break;
+        case COLORSTATE_SOLID_GREEN:
+            Serial.print("Solid Green");
+            break;
+        case COLORSTATE_SOLID_RED:
+            Serial.print("Solid Red");
+            break;
+        case COLORSTATE_SOLID_CYAN:
+            Serial.print("Solid Cyan");
+            break;
+        default:
+            Serial.print("UNKNOWN");
+    }
+    Serial.println();
+}
+
+const int buttonPin = 10; // switch is connected to pin 10
 int val; // variable for reading the pin status
 int val2;
-int buttonState; // variable to hold the button state
 int lightMode = 0; // how many times the button has been pressed
+
+unsigned long lastTime = 0;
+unsigned long startTime = 0;
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(TPIXEL, PIN, NEO_GRB + NEO_KHZ800);
 // our RGB -> eye-recognized gamma color
 byte gammatable[256];
+static const int BUTTON_WAIT_MILLIS = 150;
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
+
+bool updatingState = false;
+
+unsigned long lastButtonRead = 0;
+bool currentButtonValue = false;
+bool newButtonValue;
+enum ButtonState {
+    BUTTONSTATE_NORMAL,
+    BUTTONSTATE_CHANGING
+};
+ButtonState buttonState = BUTTONSTATE_NORMAL;
+
+bool readButton() {
+    if (buttonState == BUTTONSTATE_CHANGING) {
+        if (millis() - lastButtonRead > BUTTON_WAIT_MILLIS) {
+            bool verifyButtonValue = !(bool) digitalRead(buttonPin);
+            if (verifyButtonValue == newButtonValue) {
+                buttonState = BUTTONSTATE_NORMAL;
+                currentButtonValue = newButtonValue;
+                return true;
+            } else {
+                buttonState = BUTTONSTATE_NORMAL;
+                newButtonValue = currentButtonValue;
+            }
+        }
+    } else {
+        newButtonValue = (bool) digitalRead(buttonPin);
+        if (newButtonValue != currentButtonValue) {
+            buttonState = BUTTONSTATE_CHANGING;
+            lastButtonRead = millis();
+        }
+    }
+    return false;
+}
+
+void updateState() {
+    if (readButton() && currentButtonValue) {
+        if (!updatingState) {
+            colorState++;
+            if (colorState >= maxColors) {
+                colorState = COLORSTATE_RAINBOW;
+            }
+            updatingState = true;
+            printColorState();
+        }
+    } else {
+        updatingState = false;
+    }
+}
 
 // Fill the dots one after the other with a color
 void colorWipe(uint32_t c, uint8_t wait) {
+    Serial.print("Doing ColorWipe ");
+    Serial.println(c, HEX);
     for (uint16_t i = 0; i < strip.numPixels(); i++) {
+        bool shouldContinue = false;
+        updateState();
+        if (colorState == COLORSTATE_SOLID_BLUE && c == COLOR_BLUE) {
+            shouldContinue = true;
+        } else if (colorState == COLORSTATE_SOLID_RED && c == COLOR_RED) {
+            shouldContinue = true;
+        } else if (colorState == COLORSTATE_SOLID_GREEN && c == COLOR_GREEN) {
+            shouldContinue = true;
+        } else if (colorState == COLORSTATE_SOLID_CYAN && c == COLOR_CYAN) {
+            shouldContinue = true;
+        }
+        if (!shouldContinue) {
+            return;
+        }
+
         strip.setPixelColor(i, c);
         strip.show();
         delay(20);
@@ -39,11 +146,18 @@ uint32_t Wheel(byte WheelPos) {
     }
 }
 
+
 //Rainbow Program
 void rainbow(uint8_t wait) {
+    Serial.println("Doing Rainbow");
     uint16_t i, j;
 
     for (j = 0; j < 256; j++) {
+        updateState();
+        if (colorState != COLORSTATE_RAINBOW) {
+            return;
+        }
+
         for (i = 0; i < strip.numPixels(); i++) {
             strip.setPixelColor(i, Wheel((i + j) & 255));
         }
@@ -67,11 +181,11 @@ void rainbowCycle(uint8_t wait) {
 
 void rain() {
     // Create an array of 20 raindrops
-    const int count = 20;
-    int pos[count];
+    const int raindropCount = 20;
+    int pos[raindropCount];
     // Set each rain drop at the starting gate.
     // Signify by a position of -1
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < raindropCount; i++) {
         pos[i] = -1;
     }
     // Main loop. Keep looping until we've done
@@ -84,7 +198,7 @@ void rain() {
             strip.setPixelColor(i, 0);
 
         // Loop for each rain drop
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < raindropCount; i++) {
             // If the drop is out of the starting gate,
             // turn on the LED for it.
             if (pos[i] >= 0) {
@@ -108,40 +222,9 @@ void rain() {
     }
 }
 
-void setup() {
-    Serial.begin(115200); // Set up serial communication at 9600bps
-    pinMode(switchPin, INPUT_PULLUP); // Set the switch pin as input
-    pinMode(PIN, OUTPUT);
-    strip.setBrightness(80); //adjust brightness here
-    buttonState = digitalRead(switchPin); // read the initial state
-    strip.begin();
-    strip.show(); // Initialize all pixels to 'off'
-    if (tcs.begin()) {
-        Serial.println("Found sensor");
-    } else {
-        Serial.println("No TCS34725 found ... check your connections");
-        while (1); // halt!
-    }
-// thanks PhilB for this gamma table!
-// it helps convert RGB colors to what humans see
-    for (int i = 0; i < 256; i++) {
-        float x = i;
-        x /= 255;
-        x = pow(x, 2.5);
-        x *= 255;
-        gammatable[i] = x;
-//Serial.println(gammatable[i]);
-    }
-    for (int i = 0;
-         i < 3; i++) { //this sequence flashes the first pixel three times as a countdown to the color reading.
-        strip.setPixelColor(0, strip.Color(188, 188,
-                                           188)); //white, but dimmer-- 255 for all three values makes it blinding!
-        strip.show();
-        delay(1000);
-        strip.setPixelColor(0, strip.Color(0, 0, 0));
-        strip.show();
-        delay(500);
-    }
+float r, g, b;
+
+void takeColorMeasurement() {
     uint16_t clear, red, green, blue;
 
     tcs.setInterrupt(false); // turn on LED
@@ -162,7 +245,6 @@ void setup() {
     sum += green;
     sum += blue;
     sum = clear;
-    float r, g, b;
     r = red;
     r /= sum;
     g = green;
@@ -183,50 +265,143 @@ void setup() {
     Serial.print((int) g);
     Serial.print(" ");
     Serial.println((int) b);
-    colorWipe(strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]), 0);
 }
 
-void loop() {
-    //rain();
-    val = digitalRead(switchPin); // read input value and store it in val
-    delay(20);
-    val2 = digitalRead(switchPin);
-    if (val == val2) {
-        if (val != buttonState && val == LOW) { // the button state has changed!
-            if (lightMode == 0) {
-                lightMode = 1;
-            }
-            else if (lightMode == 1) {
-                lightMode = 2;
-            }
-            else if (lightMode == 2) {
-                lightMode = 3;
-                //delay (20);
-            }
-            else if (lightMode == 3) {
-                lightMode = 0;
-            }
-            Serial.print("lightMode is now: " );
-            Serial.println(lightMode);
-        }
+void setup() {
+    Serial.begin(115200); // Set up serial communication at 9600bps
+    while (!Serial) { ;
+    }
+    Serial.println("Starting FloraBrella (Tango Version)");
+    pinMode(buttonPin, INPUT_PULLUP); // Set the switch pin as input
+    pinMode(PIN, OUTPUT);
+    strip.setBrightness(80); //adjust brightness here
+
+    strip.begin();
+    strip.show(); // Initialize all pixels to 'off'
+    if (tcs.begin()) {
+        Serial.println("Found sensor");
+    } else {
+        Serial.println("No TCS34725 found ... check your connections");
+        while (1); // halt!
+    }
+    tcs.setInterrupt(true); // turn off LED
+
+// thanks PhilB for this gamma table!
+// it helps convert RGB colors to what humans see
+    for (int i = 0; i < 256; i++) {
+        float x = i;
+        x /= 255;
+        x = pow(x, 2.5);
+        x *= 255;
+        gammatable[i] = x;
+//Serial.println(gammatable[i]);
     }
 
-    buttonState = val; // save the new state in our variable
-    if (lightMode == 0) {
-        strip.show();
+//    for (int i = 0;
+//         i < 3; i++) { //this sequence flashes the first pixel three times as a countdown to the color reading.
+//        strip.setPixelColor(0, strip.Color(188, 188,
+//                                           188)); //white, but dimmer-- 255 for all three values makes it blinding!
+//        strip.show();
+//        delay(1000);
+//        strip.setPixelColor(0, strip.Color(0, 0, 0));
+//        strip.show();
+//        delay(500);
+//    }
+//
+//    rain();
+//    rainbowCycle(10);
+//    takeColorMeasurement();
+//    colorWipe(strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]), 0);
+}
+
+bool processingButtonPress = false;
+enum State {
+    STATE_RAINBOW,
+    STATE_RAINBOW_CYCLE,
+    STATE_COLOR_WIPE,
+};
+
+void loop() {
+//    takeColorMeasurement();
+//    delay (500);
+
+//    colorWipe(0xFF0000, 0);
+    switch (colorState) {
+        case COLORSTATE_RAINBOW:
+            rainbow(3);
+            break;
+        case COLORSTATE_SOLID_BLUE:
+            colorWipe(COLOR_BLUE, 0);
+            break;
+        case COLORSTATE_SOLID_GREEN:
+            colorWipe(COLOR_GREEN, 0);
+            break;
+        case COLORSTATE_SOLID_RED:
+            colorWipe(COLOR_RED, 0);
+            break;
+        case COLORSTATE_SOLID_CYAN:
+            colorWipe(COLOR_CYAN, 0);
+            break;
+        default:
+            COLORSTATE_RAINBOW;
+            break;
     }
-    if (lightMode == 1) {
-        rainbowCycle(10);
-        delay(20);
-    }
-    if (lightMode == 2) {
-        rainbowCycle(10);
-        delay(20);
-    }
-    if (lightMode == 3) {
-        rain();
-        delay(20);
-    }
+
+
+//    //rain();
+//    val = digitalRead(buttonPin); // read input value and store it in val
+//    delay(20);
+//    val2 = digitalRead(buttonPin);
+//    if (val2 == 0 && val == val2 && !processingButtonPress) {
+//        processingButtonPress = true;
+//        Serial.print("Button val1: ");
+//        Serial.print(val);
+//        Serial.print(", val2: ");
+//        Serial.print(val2);
+//        Serial.println();
+//        takeColorMeasurement();
+//        colorWipe(strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]), 0);
+//    }
+//
+//    if ( val2 == 1 && processingButtonPress) {
+//        processingButtonPress = false;
+//    }
+////
+//        if (val != buttonState && val == LOW) { // the button state has changed!
+//            if (lightMode == 0) {
+//                lightMode = 1;
+//            }
+//            else if (lightMode == 1) {
+//                lightMode = 2;
+//            }
+//            else if (lightMode == 2) {
+//                lightMode = 3;
+//                //delay (20);
+//            }
+//            else if (lightMode == 3) {
+//                lightMode = 0;
+//            }
+//            Serial.print("lightMode is now: " );
+//            Serial.println(lightMode);
+//        }
+//    }
+//
+//    buttonState = val; // save the new state in our variable
+//    if (lightMode == 0) {
+//        strip.show();
+//    }
+//    if (lightMode == 1) {
+//        rainbowCycle(10);
+//        delay(20);
+//    }
+//    if (lightMode == 2) {
+//        rainbowCycle(10);
+//        delay(20);
+//    }
+//    if (lightMode == 3) {
+//        rain();
+//        delay(20);
+//    }
 }
 // Rain Program
 
