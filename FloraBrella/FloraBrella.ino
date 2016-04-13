@@ -122,7 +122,9 @@ uint32_t takeColorMeasurement() {
 
 ButtonResponse readButton() {
     bool tmpButtonValue = (bool) digitalRead(buttonPin);
-
+    if (tmpButtonValue) {
+        longPressStart = millis();
+    }
     if (!tmpButtonValue && (longPressStart != 0) && (millis() - longPressStart > 1000)) {
         Serial.println("longClick");
         return BUTTONRESPONSE_LONG_CLICK;
