@@ -399,7 +399,7 @@ void rainbowPrimaryWhole() {
             strip.setPixelColor(i, primaryColors[rainbowColor]);
         }
         rainbowColor++;
-        if (rainbowColor >= 9) {
+        if (rainbowColor >= 8) {
             rainbowColor = 0;
         }
         strip.show();
