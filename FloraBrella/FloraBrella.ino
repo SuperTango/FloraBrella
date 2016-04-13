@@ -18,10 +18,16 @@ enum UserMode {
     MODE_SOLID_CYAN,
     MODE_READANDSET,
 };
+
 inline UserMode operator++(UserMode &currentMode, int)
 {
     const UserMode prevMode = currentMode;
     const int i = static_cast<int>(currentMode);
+    // This is a bit of a hack using MODE_READANDSET as the mod (%) operator value here.  We don't actually
+    // want to increment to MODE_READANDSET (since it's triggered by a long click). MODE_READANDSET should always
+    // be the last element in the UserMode enum, so we're using it's ordinal value to mod the number so that
+    // the ++ operator will wrap around from the second to last element (the one before MODE_READANDSET) to the
+    // first element.
     currentMode = static_cast<UserMode>((i + 1) % MODE_READANDSET);
     return prevMode;
 }
