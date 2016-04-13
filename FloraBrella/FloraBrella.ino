@@ -5,15 +5,17 @@
 #define PIN 6
 #define TPIXEL 13 * 8 //The total amount of pixel's/led's in your connected strip/stick (Default is 60)
 
-#define COLOR_RED 0xFF0000
+#define COLOR_RED   0xFF0000
 #define COLOR_GREEN 0x00FF00
-#define COLOR_BLUE 0x0000FF
-#define COLOR_CYAN 0x009999
+#define COLOR_BLUE  0x0000FF
+#define COLOR_CYAN  0x009999
 
 enum UserMode {
     MODE_RAINBOW,
     MODE_SOLID_RED,
+    MODE_SOLID_GREEN,
     MODE_SOLID_BLUE,
+    MODE_SOLID_CYAN,
     MODE_READANDSET,
 };
 inline UserMode operator++(UserMode &currentMode, int)
@@ -28,17 +30,7 @@ UserMode userMode = MODE_RAINBOW;
 enum ColorFunction {
     FUNCTION_RAINBOW,
     FUNCTION_COLORWIPE,
-    FUNCTION_READANDSET,
-//    MAXCOUNT,
 };
-//inline ColorFunction operator++(ColorFunction &eDOW, int)
-//{
-//    const ColorFunction ePrev = eDOW;
-//    const int i = static_cast<int>(eDOW);
-//    eDOW = static_cast<ColorFunction>((i + 1) % 4);
-//    return ePrev;
-//}
-
 ColorFunction colorFunction = FUNCTION_RAINBOW;
 
 float r, g, b;
@@ -51,34 +43,8 @@ enum ButtonResponse {
 };
 ButtonResponse readButton();
 
-void printColorFunction() {
-    Serial.print("ColorState is: ");
-
-    switch (colorFunction) {
-        case FUNCTION_RAINBOW:
-            Serial.print("Rainbow");
-            break;
-        case FUNCTION_COLORWIPE:
-            Serial.print("Color Wipe: " );
-            Serial.print(colorWipeColor);
-            break;
-        case FUNCTION_READANDSET:
-            Serial.print("ReadAndSet: " );
-            Serial.print(colorWipeColor);
-            break;
-        default:
-            Serial.print("UNKNOWN");
-    }
-    Serial.println();
-}
-
 const int buttonPin = 10; // switch is connected to pin 10
 int val; // variable for reading the pin status
-int val2;
-int lightMode = 0; // how many times the button has been pressed
-
-unsigned long lastTime = 0;
-unsigned long startTime = 0;
 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(TPIXEL, PIN, NEO_GRB + NEO_KHZ800);
 // our RGB -> eye-recognized gamma color
@@ -142,7 +108,6 @@ uint32_t takeColorMeasurement() {
     Serial.print(" ");
     Serial.println((int) b);
     return strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]);
-
 }
 
 ButtonResponse readButton() {
@@ -150,7 +115,6 @@ ButtonResponse readButton() {
 
     if (!tmpButtonValue && (longPressStart != 0) && (millis() - longPressStart > 1000)) {
         Serial.println("longClick");
-
         return BUTTONRESPONSE_LONG_CLICK;
     }
 
@@ -218,6 +182,14 @@ void updateUserMode() {
                     colorFunction = FUNCTION_COLORWIPE;
                     colorWipeColor = COLOR_RED;
                     break;
+                case MODE_SOLID_CYAN:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_CYAN;
+                    break;
+                case MODE_SOLID_GREEN:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_GREEN;
+                    break;
 
             }
 
@@ -252,7 +224,7 @@ void colorWipe(uint32_t c, uint8_t wait) {
         }
         strip.setPixelColor(i, c);
         strip.show();
-        delay(20);
+        delay(wait);
     }
 }
 
@@ -305,9 +277,7 @@ void rainbowCycle(uint8_t wait) {
 
 void readAndSetColor() {
     takeColorMeasurement();
-//    colorFunction = FUNCTION_COLORWIPE;
     colorWipeColor = strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]);
-//    colorWipe(colorWipeColor, 0);
 }
 
 void rain() {
@@ -352,8 +322,6 @@ void rain() {
 
     }
 }
-
-
 
 void setup() {
     Serial.begin(115200); // Set up serial communication at 9600bps
@@ -400,88 +368,16 @@ void setup() {
 //    colorWipe(strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]), 0);
 }
 
-bool processingButtonPress = false;
-enum State {
-    STATE_RAINBOW,
-    STATE_RAINBOW_CYCLE,
-    STATE_COLOR_WIPE,
-};
-
 void loop() {
-//    takeColorMeasurement();
-//    delay (500);
-
-//    colorWipe(0xFF0000, 0);
     switch (colorFunction) {
         case FUNCTION_RAINBOW:
             rainbow(3);
             break;
         case FUNCTION_COLORWIPE:
-            colorWipe(colorWipeColor, 0);
-            break;
-        case FUNCTION_READANDSET:
-            readAndSetColor();
+            colorWipe(colorWipeColor, 10);
             break;
         default:
             FUNCTION_RAINBOW;
             break;
     }
-
-
-//    //rain();
-//    val = digitalRead(buttonPin); // read input value and store it in val
-//    delay(20);
-//    val2 = digitalRead(buttonPin);
-//    if (val2 == 0 && val == val2 && !processingButtonPress) {
-//        processingButtonPress = true;
-//        Serial.print("Button val1: ");
-//        Serial.print(val);
-//        Serial.print(", val2: ");
-//        Serial.print(val2);
-//        Serial.println();
-//        takeColorMeasurement();
-//        colorWipe(strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]), 0);
-//    }
-//
-//    if ( val2 == 1 && processingButtonPress) {
-//        processingButtonPress = false;
-//    }
-////
-//        if (val != buttonState && val == LOW) { // the button state has changed!
-//            if (lightMode == 0) {
-//                lightMode = 1;
-//            }
-//            else if (lightMode == 1) {
-//                lightMode = 2;
-//            }
-//            else if (lightMode == 2) {
-//                lightMode = 3;
-//                //delay (20);
-//            }
-//            else if (lightMode == 3) {
-//                lightMode = 0;
-//            }
-//            Serial.print("lightMode is now: " );
-//            Serial.println(lightMode);
-//        }
-//    }
-//
-//    buttonState = val; // save the new state in our variable
-//    if (lightMode == 0) {
-//        strip.show();
-//    }
-//    if (lightMode == 1) {
-//        rainbowCycle(10);
-//        delay(20);
-//    }
-//    if (lightMode == 2) {
-//        rainbowCycle(10);
-//        delay(20);
-//    }
-//    if (lightMode == 3) {
-//        rain();
-//        delay(20);
-//    }
 }
-// Rain Program
-
