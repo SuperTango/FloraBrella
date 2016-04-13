@@ -10,15 +10,39 @@
 #define COLOR_BLUE  0x0000FF
 #define COLOR_CYAN  0x009999
 #define COLOR_WHITE 0x999999
+#define COLOR_YELLOW 0xAAAA00
+#define COLOR_ORANGE 0xFF4500
+#define COLOR_CHARTREUSE 0x7FFF00
+#define COLOR_PURPLE 0xAA00AA
+#define COLOR_PINK 0xFF1493
+
+uint32_t primaryColors[] = {
+        COLOR_RED,
+        COLOR_ORANGE,
+        COLOR_YELLOW,
+        COLOR_GREEN,
+        COLOR_BLUE,
+        COLOR_CYAN,
+        COLOR_PURPLE,
+        COLOR_PINK,
+        COLOR_CHARTREUSE,
+};
 
 enum UserMode {
     MODE_RAINBOW,
+    MODE_SOLID_CYAN,
     MODE_SOLID_RED,
+    MODE_SOLID_ORANGE,
+    MODE_SOLID_YELLOW,
     MODE_SOLID_GREEN,
     MODE_SOLID_BLUE,
-    MODE_SOLID_CYAN,
+    MODE_SOLID_PURPLE,
+    MODE_SOLID_PINK,
     MODE_SOLID_WHITE,
     MODE_RANDOM_DOTS,
+    MODE_RANDOM_PRIMARY,
+    MODE_RAINBOW_PRIMARY_WHOLE,
+//    MODE_RAIN,
     MODE_READANDSET,
 };
 
@@ -40,6 +64,9 @@ enum ColorFunction {
     FUNCTION_RAINBOW,
     FUNCTION_COLORWIPE,
     FUNCTION_RANDOM_DOTS,
+    FUNCTION_RANDOM_PRIMARY,
+    FUNCTION_RAINBOW_PRIMARY_WHOLE,
+    FUNCTION_RAIN,
 };
 ColorFunction colorFunction = FUNCTION_RAINBOW;
 
@@ -186,21 +213,37 @@ void updateUserMode() {
                 case MODE_RAINBOW:
                     colorFunction = FUNCTION_RAINBOW;
                     break;
-                case MODE_SOLID_BLUE:
-                    colorFunction = FUNCTION_COLORWIPE;
-                    colorWipeColor = COLOR_BLUE;
-                    break;
                 case MODE_SOLID_RED:
                     colorFunction = FUNCTION_COLORWIPE;
                     colorWipeColor = COLOR_RED;
                     break;
-                case MODE_SOLID_CYAN:
+                case MODE_SOLID_ORANGE:
                     colorFunction = FUNCTION_COLORWIPE;
-                    colorWipeColor = COLOR_CYAN;
+                    colorWipeColor = COLOR_ORANGE;
+                    break;
+                case MODE_SOLID_YELLOW:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_YELLOW;
                     break;
                 case MODE_SOLID_GREEN:
                     colorFunction = FUNCTION_COLORWIPE;
                     colorWipeColor = COLOR_GREEN;
+                    break;
+                case MODE_SOLID_BLUE:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_BLUE;
+                    break;
+                case MODE_SOLID_PURPLE:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_PURPLE;
+                    break;
+                case MODE_SOLID_PINK:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_PINK;
+                    break;
+                case MODE_SOLID_CYAN:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_CYAN;
                     break;
                 case MODE_SOLID_WHITE:
                     colorFunction = FUNCTION_COLORWIPE;
@@ -209,6 +252,15 @@ void updateUserMode() {
                 case MODE_RANDOM_DOTS:
                     colorFunction = FUNCTION_RANDOM_DOTS;
                     break;
+                case MODE_RANDOM_PRIMARY:
+                    colorFunction = FUNCTION_RANDOM_PRIMARY;
+                    break;
+                case MODE_RAINBOW_PRIMARY_WHOLE:
+                    colorFunction = FUNCTION_RAINBOW_PRIMARY_WHOLE;
+                    break;
+//                case MODE_RAIN:
+//                    colorFunction = FUNCTION_RAIN;
+//                    break;
                 default:
                     colorFunction = FUNCTION_RAINBOW;
                     break;
@@ -300,10 +352,12 @@ void readAndSetColor() {
     takeColorMeasurement();
     colorWipeColor = strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]);
 }
+
 unsigned long lastRandomDots = 0;
 void randomDots() {
     updateUserMode();
     if (colorFunction != FUNCTION_RANDOM_DOTS) {
+        lastRandomDots = 0;
         return;
     }
     if (millis() - lastRandomDots > 500) {
@@ -311,6 +365,42 @@ void randomDots() {
         for (uint16_t i = 0; i < TOTAL_PIXEL_COUNT; i++) {
             long color = random(0xFFFFFF);
             strip.setPixelColor(i, (uint32_t) color);
+        }
+        strip.show();
+    }
+}
+
+void randomPrimaryDots() {
+    updateUserMode();
+    if (colorFunction != FUNCTION_RANDOM_PRIMARY) {
+        lastRandomDots = 0;
+        return;
+    }
+    if (millis() - lastRandomDots > 500) {
+        lastRandomDots = millis();
+        for (uint16_t i = 0; i < TOTAL_PIXEL_COUNT; i++) {
+            long color = primaryColors[random(9)];
+            strip.setPixelColor(i, (uint32_t) color);
+        }
+        strip.show();
+    }
+}
+
+uint8_t rainbowColor;
+void rainbowPrimaryWhole() {
+    updateUserMode();
+    if (colorFunction != FUNCTION_RAINBOW_PRIMARY_WHOLE) {
+        lastRandomDots = 0;
+        return;
+    }
+    if (millis() - lastRandomDots > 1000) {
+        lastRandomDots = millis();
+        for (uint16_t i = 0; i < TOTAL_PIXEL_COUNT; i++) {
+            strip.setPixelColor(i, primaryColors[rainbowColor]);
+        }
+        rainbowColor++;
+        if (rainbowColor >= 9) {
+            rainbowColor = 0;
         }
         strip.show();
     }
@@ -355,9 +445,31 @@ void rain() {
             strip.show();
             delay(2);
         }
-
     }
 }
+
+//void rain2() {
+//    Serial.println("rain");
+//    for ( int i = 0; i < TOTAL_PIXEL_COUNT; i++ ) {
+//        strip.setPixelColor(i, 0);
+//    }
+//    strip.show();
+//    for ( int i = 0; i < 157; i++ ) {
+//        updateUserMode();
+//        if (userMode != MODE_RAIN) {
+//            return;
+//        }
+//        float x = i / 100.0;
+////        Serial.println(x);
+//        double y = cos(x);
+//        int ledIndex = y * 13;
+//        for (int j = 0; j < 13; j++ ) {
+//            strip.setPixelColor(12-j, (ledIndex == j) ? 0xFF0000 : 0);
+//        }
+//        strip.show();
+//        delay(2);
+//    }
+//}
 
 void setup() {
     Serial.begin(115200); // Set up serial communication at 9600bps
@@ -415,6 +527,15 @@ void loop() {
         case FUNCTION_RANDOM_DOTS:
             randomDots();
             break;
+        case FUNCTION_RANDOM_PRIMARY:
+            randomPrimaryDots();
+            break;
+        case FUNCTION_RAINBOW_PRIMARY_WHOLE:
+            rainbowPrimaryWhole();
+            break;
+//        case FUNCTION_RAIN:
+//            rain2();
+//            break;
         default:
             FUNCTION_RAINBOW;
             break;
