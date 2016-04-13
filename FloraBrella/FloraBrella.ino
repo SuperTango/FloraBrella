@@ -3,12 +3,13 @@
 #include <Adafruit_NeoPixel.h>
 
 #define PIN 6
-#define TPIXEL 13 * 8 //The total amount of pixel's/led's in your connected strip/stick (Default is 60)
+#define TOTAL_PIXEL_COUNT 13 * 8 //The total amount of pixel's/led's in your connected strip/stick (Default is 60)
 
 #define COLOR_RED   0xFF0000
 #define COLOR_GREEN 0x00FF00
 #define COLOR_BLUE  0x0000FF
 #define COLOR_CYAN  0x009999
+#define COLOR_WHITE 0x999999
 
 enum UserMode {
     MODE_RAINBOW,
@@ -16,6 +17,8 @@ enum UserMode {
     MODE_SOLID_GREEN,
     MODE_SOLID_BLUE,
     MODE_SOLID_CYAN,
+    MODE_SOLID_WHITE,
+    MODE_RANDOM_DOTS,
     MODE_READANDSET,
 };
 
@@ -36,6 +39,7 @@ UserMode userMode = MODE_RAINBOW;
 enum ColorFunction {
     FUNCTION_RAINBOW,
     FUNCTION_COLORWIPE,
+    FUNCTION_RANDOM_DOTS,
 };
 ColorFunction colorFunction = FUNCTION_RAINBOW;
 
@@ -52,7 +56,7 @@ ButtonResponse readButton();
 const int buttonPin = 10; // switch is connected to pin 10
 int val; // variable for reading the pin status
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(TPIXEL, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(TOTAL_PIXEL_COUNT, PIN, NEO_GRB + NEO_KHZ800);
 // our RGB -> eye-recognized gamma color
 byte gammatable[256];
 static const int BUTTON_WAIT_MILLIS = 30;
@@ -196,7 +200,16 @@ void updateUserMode() {
                     colorFunction = FUNCTION_COLORWIPE;
                     colorWipeColor = COLOR_GREEN;
                     break;
-
+                case MODE_SOLID_WHITE:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_WHITE;
+                    break;
+                case MODE_RANDOM_DOTS:
+                    colorFunction = FUNCTION_RANDOM_DOTS;
+                    break;
+                default:
+                    colorFunction = FUNCTION_RAINBOW;
+                    break;
             }
 
 //            printColorFunction();
@@ -284,6 +297,21 @@ void rainbowCycle(uint8_t wait) {
 void readAndSetColor() {
     takeColorMeasurement();
     colorWipeColor = strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]);
+}
+unsigned long lastRandomDots = 0;
+void randomDots() {
+    updateUserMode();
+    if (colorFunction != FUNCTION_RANDOM_DOTS) {
+        return;
+    }
+    if (millis() - lastRandomDots > 500) {
+        lastRandomDots = millis();
+        for (uint16_t i = 0; i < TOTAL_PIXEL_COUNT; i++) {
+            long color = random(0xFFFFFF);
+            strip.setPixelColor(i, (uint32_t) color);
+        }
+        strip.show();
+    }
 }
 
 void rain() {
@@ -381,6 +409,9 @@ void loop() {
             break;
         case FUNCTION_COLORWIPE:
             colorWipe(colorWipeColor, 10);
+            break;
+        case FUNCTION_RANDOM_DOTS:
+            randomDots();
             break;
         default:
             FUNCTION_RAINBOW;
