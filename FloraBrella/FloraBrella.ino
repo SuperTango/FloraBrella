@@ -10,32 +10,61 @@
 #define COLOR_BLUE 0x0000FF
 #define COLOR_CYAN 0x009999
 
-const uint8_t COLORSTATE_RAINBOW = 0;
-const uint8_t COLORSTATE_SOLID_RED = 1;
-const uint8_t COLORSTATE_SOLID_GREEN = 2;
-const uint8_t COLORSTATE_SOLID_BLUE = 3;
-const uint8_t COLORSTATE_SOLID_CYAN = 4;
-uint8_t colorState = COLORSTATE_RAINBOW;
-const uint8_t maxColors = 5;
+enum UserMode {
+    MODE_RAINBOW,
+    MODE_SOLID_RED,
+    MODE_SOLID_BLUE,
+    MODE_READANDSET,
+};
+inline UserMode operator++(UserMode &currentMode, int)
+{
+    const UserMode prevMode = currentMode;
+    const int i = static_cast<int>(currentMode);
+    currentMode = static_cast<UserMode>((i + 1) % MODE_READANDSET);
+    return prevMode;
+}
+UserMode userMode = MODE_RAINBOW;
 
-void printColorState() {
+enum ColorFunction {
+    FUNCTION_RAINBOW,
+    FUNCTION_COLORWIPE,
+    FUNCTION_READANDSET,
+//    MAXCOUNT,
+};
+//inline ColorFunction operator++(ColorFunction &eDOW, int)
+//{
+//    const ColorFunction ePrev = eDOW;
+//    const int i = static_cast<int>(eDOW);
+//    eDOW = static_cast<ColorFunction>((i + 1) % 4);
+//    return ePrev;
+//}
+
+ColorFunction colorFunction = FUNCTION_RAINBOW;
+
+float r, g, b;
+uint32_t colorWipeColor;
+
+enum ButtonResponse {
+    BUTTONRESPONSE_NONE,
+    BUTTONRESPONSE_CLICK,
+    BUTTONRESPONSE_LONG_CLICK,
+};
+ButtonResponse readButton();
+
+void printColorFunction() {
     Serial.print("ColorState is: ");
 
-    switch (colorState) {
-        case COLORSTATE_RAINBOW:
+    switch (colorFunction) {
+        case FUNCTION_RAINBOW:
             Serial.print("Rainbow");
             break;
-        case COLORSTATE_SOLID_BLUE:
-            Serial.print("Solid Blue");
+        case FUNCTION_COLORWIPE:
+            Serial.print("Color Wipe: " );
+            Serial.print(colorWipeColor);
             break;
-        case COLORSTATE_SOLID_GREEN:
-            Serial.print("Solid Green");
-            break;
-        case COLORSTATE_SOLID_RED:
-            Serial.print("Solid Red");
-            break;
-        case COLORSTATE_SOLID_CYAN:
-            Serial.print("Solid Cyan");
+        case FUNCTION_READANDSET:
+            Serial.print("ReadAndSet: " );
+            Serial.print(colorWipeColor);
             break;
         default:
             Serial.print("UNKNOWN");
@@ -54,78 +83,173 @@ unsigned long startTime = 0;
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(TPIXEL, PIN, NEO_GRB + NEO_KHZ800);
 // our RGB -> eye-recognized gamma color
 byte gammatable[256];
-static const int BUTTON_WAIT_MILLIS = 150;
+static const int BUTTON_WAIT_MILLIS = 30;
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
-bool updatingState = false;
+bool updatingMode = false;
 
 unsigned long lastButtonRead = 0;
-bool currentButtonValue = false;
+bool currentButtonValue = true;
 bool newButtonValue;
 enum ButtonState {
     BUTTONSTATE_NORMAL,
     BUTTONSTATE_CHANGING
 };
+
 ButtonState buttonState = BUTTONSTATE_NORMAL;
 
-bool readButton() {
+unsigned long longPressStart = 0;
+
+uint32_t takeColorMeasurement() {
+    uint16_t clear, red, green, blue;
+
+    tcs.setInterrupt(false); // turn on LED
+
+    delay(60); // takes 50ms to read
+    tcs.getRawData(&red, &green, &blue, &clear);
+    tcs.setInterrupt(true); // turn off LED
+    Serial.print("C:\t");
+    Serial.print(clear);
+    Serial.print("\tR:\t");
+    Serial.print(red);
+    Serial.print("\tG:\t");
+    Serial.print(green);
+    Serial.print("\tB:\t");
+    Serial.print(blue);
+// Figure out some basic hex code for visualization
+    uint32_t sum = red;
+    sum += green;
+    sum += blue;
+    sum = clear;
+    r = red;
+    r /= sum;
+    g = green;
+    g /= sum;
+    b = blue;
+    b /= sum;
+    r *= 256;
+    g *= 256;
+    b *= 256;
+    Serial.print("\t");
+    Serial.print((int) r, HEX);
+    Serial.print((int) g, HEX);
+    Serial.print((int) b, HEX);
+    Serial.println();
+
+    Serial.print((int) r);
+    Serial.print(" ");
+    Serial.print((int) g);
+    Serial.print(" ");
+    Serial.println((int) b);
+    return strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]);
+
+}
+
+ButtonResponse readButton() {
+    bool tmpButtonValue = (bool) digitalRead(buttonPin);
+
+    if (!tmpButtonValue && (longPressStart != 0) && (millis() - longPressStart > 1000)) {
+        Serial.println("longClick");
+
+        return BUTTONRESPONSE_LONG_CLICK;
+    }
+
     if (buttonState == BUTTONSTATE_CHANGING) {
         if (millis() - lastButtonRead > BUTTON_WAIT_MILLIS) {
-            bool verifyButtonValue = !(bool) digitalRead(buttonPin);
+            bool verifyButtonValue = tmpButtonValue;
+            Serial.print("verifyButtonValue: ");
+            Serial.println(verifyButtonValue);
             if (verifyButtonValue == newButtonValue) {
                 buttonState = BUTTONSTATE_NORMAL;
                 currentButtonValue = newButtonValue;
-                return true;
+                if (newButtonValue) {
+                    longPressStart = 0;
+                }
+                return BUTTONRESPONSE_CLICK;
             } else {
                 buttonState = BUTTONSTATE_NORMAL;
                 newButtonValue = currentButtonValue;
             }
         }
     } else {
-        newButtonValue = (bool) digitalRead(buttonPin);
+        newButtonValue = tmpButtonValue;
         if (newButtonValue != currentButtonValue) {
+            Serial.print("Got a button press, old: " );
+            Serial.print(currentButtonValue);
+            Serial.print(", new: " );
+            Serial.print(newButtonValue);
+            Serial.println();
             buttonState = BUTTONSTATE_CHANGING;
             lastButtonRead = millis();
+            if (!newButtonValue) {
+                longPressStart = lastButtonRead;
+            }
         }
     }
-    return false;
+    return BUTTONRESPONSE_NONE;
 }
 
-void updateState() {
-    if (readButton() && currentButtonValue) {
-        if (!updatingState) {
-            colorState++;
-            if (colorState >= maxColors) {
-                colorState = COLORSTATE_RAINBOW;
+bool processedLongClick = false;
+void updateUserMode() {
+    ButtonResponse buttonResponse = readButton();
+    if (buttonResponse == BUTTONRESPONSE_CLICK && !currentButtonValue) {
+        Serial.println("X");
+        if (!updatingMode) {
+            Serial.print ("Changing userMode.  Old function: " );
+            Serial.print(userMode);
+            if (userMode == MODE_READANDSET) {
+                userMode = MODE_RAINBOW;
+            } else {
+                userMode++;
             }
-            updatingState = true;
-            printColorState();
+            Serial.print(", new userMode: " );
+            Serial.print(userMode);
+            Serial.println();
+            updatingMode = true;
+            switch (userMode) {
+                case MODE_RAINBOW:
+                    colorFunction = FUNCTION_RAINBOW;
+                    break;
+                case MODE_SOLID_BLUE:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_BLUE;
+                    break;
+                case MODE_SOLID_RED:
+                    colorFunction = FUNCTION_COLORWIPE;
+                    colorWipeColor = COLOR_RED;
+                    break;
+
+            }
+
+//            printColorFunction();
+        }
+        processedLongClick = false;
+    } else if (buttonResponse == BUTTONRESPONSE_LONG_CLICK) {
+        if (!processedLongClick) {
+            processedLongClick = true;
+            colorFunction = FUNCTION_COLORWIPE;
+            colorWipeColor = takeColorMeasurement();
+
         }
     } else {
-        updatingState = false;
+        updatingMode = false;
+        processedLongClick = false;
     }
 }
+
+
 
 // Fill the dots one after the other with a color
 void colorWipe(uint32_t c, uint8_t wait) {
     Serial.print("Doing ColorWipe ");
-    Serial.println(c, HEX);
+    Serial.print(c, HEX);
+    Serial.print(", ColorWipeColor: " );
+    Serial.println(colorWipeColor, HEX);
     for (uint16_t i = 0; i < strip.numPixels(); i++) {
-        bool shouldContinue = false;
-        updateState();
-        if (colorState == COLORSTATE_SOLID_BLUE && c == COLOR_BLUE) {
-            shouldContinue = true;
-        } else if (colorState == COLORSTATE_SOLID_RED && c == COLOR_RED) {
-            shouldContinue = true;
-        } else if (colorState == COLORSTATE_SOLID_GREEN && c == COLOR_GREEN) {
-            shouldContinue = true;
-        } else if (colorState == COLORSTATE_SOLID_CYAN && c == COLOR_CYAN) {
-            shouldContinue = true;
-        }
-        if (!shouldContinue) {
+        updateUserMode();
+        if (colorFunction != FUNCTION_COLORWIPE || c != colorWipeColor) {
             return;
         }
-
         strip.setPixelColor(i, c);
         strip.show();
         delay(20);
@@ -153,8 +277,8 @@ void rainbow(uint8_t wait) {
     uint16_t i, j;
 
     for (j = 0; j < 256; j++) {
-        updateState();
-        if (colorState != COLORSTATE_RAINBOW) {
+        updateUserMode();
+        if (colorFunction != FUNCTION_RAINBOW) {
             return;
         }
 
@@ -177,6 +301,13 @@ void rainbowCycle(uint8_t wait) {
         strip.show();
         delay(wait);
     }
+}
+
+void readAndSetColor() {
+    takeColorMeasurement();
+//    colorFunction = FUNCTION_COLORWIPE;
+    colorWipeColor = strip.Color(gammatable[(int) r], gammatable[(int) g], gammatable[(int) b]);
+//    colorWipe(colorWipeColor, 0);
 }
 
 void rain() {
@@ -222,55 +353,10 @@ void rain() {
     }
 }
 
-float r, g, b;
 
-void takeColorMeasurement() {
-    uint16_t clear, red, green, blue;
-
-    tcs.setInterrupt(false); // turn on LED
-
-    delay(60); // takes 50ms to read
-    tcs.getRawData(&red, &green, &blue, &clear);
-    tcs.setInterrupt(true); // turn off LED
-    Serial.print("C:\t");
-    Serial.print(clear);
-    Serial.print("\tR:\t");
-    Serial.print(red);
-    Serial.print("\tG:\t");
-    Serial.print(green);
-    Serial.print("\tB:\t");
-    Serial.print(blue);
-// Figure out some basic hex code for visualization
-    uint32_t sum = red;
-    sum += green;
-    sum += blue;
-    sum = clear;
-    r = red;
-    r /= sum;
-    g = green;
-    g /= sum;
-    b = blue;
-    b /= sum;
-    r *= 256;
-    g *= 256;
-    b *= 256;
-    Serial.print("\t");
-    Serial.print((int) r, HEX);
-    Serial.print((int) g, HEX);
-    Serial.print((int) b, HEX);
-    Serial.println();
-
-    Serial.print((int) r);
-    Serial.print(" ");
-    Serial.print((int) g);
-    Serial.print(" ");
-    Serial.println((int) b);
-}
 
 void setup() {
     Serial.begin(115200); // Set up serial communication at 9600bps
-    while (!Serial) { ;
-    }
     Serial.println("Starting FloraBrella (Tango Version)");
     pinMode(buttonPin, INPUT_PULLUP); // Set the switch pin as input
     pinMode(PIN, OUTPUT);
@@ -326,24 +412,18 @@ void loop() {
 //    delay (500);
 
 //    colorWipe(0xFF0000, 0);
-    switch (colorState) {
-        case COLORSTATE_RAINBOW:
+    switch (colorFunction) {
+        case FUNCTION_RAINBOW:
             rainbow(3);
             break;
-        case COLORSTATE_SOLID_BLUE:
-            colorWipe(COLOR_BLUE, 0);
+        case FUNCTION_COLORWIPE:
+            colorWipe(colorWipeColor, 0);
             break;
-        case COLORSTATE_SOLID_GREEN:
-            colorWipe(COLOR_GREEN, 0);
-            break;
-        case COLORSTATE_SOLID_RED:
-            colorWipe(COLOR_RED, 0);
-            break;
-        case COLORSTATE_SOLID_CYAN:
-            colorWipe(COLOR_CYAN, 0);
+        case FUNCTION_READANDSET:
+            readAndSetColor();
             break;
         default:
-            COLORSTATE_RAINBOW;
+            FUNCTION_RAINBOW;
             break;
     }
 
